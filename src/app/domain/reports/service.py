@@ -1,0 +1,104 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from pydantic import ValidationError
+
+from src.app.infrastructure.storage.report_store import (
+    EmptyReportDirectoryError,
+    InvalidReportFileError,
+    ReportDirectoryNotFoundError,
+    ReportNotFoundError,
+    ReportRecord,
+    ReportStore,
+)
+from src.schemas.final_report import AggregatedFPLReport, FinalGameweekReport
+
+
+@dataclass(frozen=True)
+class ReportSummary:
+    run_id: str
+    run_dir: Path
+    final_report_path: Path
+    aggregate_report_path: Path | None
+    updated_at: float
+
+
+@dataclass(frozen=True)
+class ReportBundle:
+    run_id: str
+    run_dir: Path
+    final_report_path: Path
+    aggregate_report_path: Path | None
+    final_report: FinalGameweekReport
+    aggregate_report: AggregatedFPLReport | None
+
+
+class ReportService:
+    def __init__(self, store: ReportStore | None = None) -> None:
+        self.store = store or ReportStore()
+
+    def list_reports(self) -> list[ReportSummary]:
+        return [self._summary_from_record(record) for record in self.store.list_reports()]
+
+    def get_latest_report(self) -> ReportBundle:
+        return self._load_record(self.store.get_latest_report())
+
+    def get_report(self, run_id: str | Path) -> ReportBundle:
+        return self._load_record(self.store.get_report(run_id))
+
+    def _load_record(self, record: ReportRecord) -> ReportBundle:
+        final_report = self._load_final_report(record)
+        aggregate_report = self._load_aggregate_report(record)
+        return ReportBundle(
+            run_id=record.run_id,
+            run_dir=record.run_dir,
+            final_report_path=record.final_report_path,
+            aggregate_report_path=record.aggregate_report_path,
+            final_report=final_report,
+            aggregate_report=aggregate_report,
+        )
+
+    def _load_final_report(self, record: ReportRecord) -> FinalGameweekReport:
+        try:
+            return FinalGameweekReport.model_validate(
+                self.store.read_json(record.final_report_path)
+            )
+        except ValidationError as exc:
+            raise InvalidReportFileError(
+                f"Invalid final report file: {record.final_report_path}"
+            ) from exc
+
+    def _load_aggregate_report(self, record: ReportRecord) -> AggregatedFPLReport | None:
+        if record.aggregate_report_path is None:
+            return None
+        try:
+            return AggregatedFPLReport.model_validate(
+                self.store.read_json(record.aggregate_report_path)
+            )
+        except ValidationError as exc:
+            raise InvalidReportFileError(
+                f"Invalid aggregate report file: {record.aggregate_report_path}"
+            ) from exc
+
+    @staticmethod
+    def _summary_from_record(record: ReportRecord) -> ReportSummary:
+        return ReportSummary(
+            run_id=record.run_id,
+            run_dir=record.run_dir,
+            final_report_path=record.final_report_path,
+            aggregate_report_path=record.aggregate_report_path,
+            updated_at=record.updated_at,
+        )
+
+
+__all__ = [
+    "EmptyReportDirectoryError",
+    "InvalidReportFileError",
+    "ReportBundle",
+    "ReportDirectoryNotFoundError",
+    "ReportNotFoundError",
+    "ReportService",
+    "ReportSummary",
+]
