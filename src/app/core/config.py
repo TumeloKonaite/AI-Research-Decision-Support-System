@@ -1,7 +1,9 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic import Field
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +12,10 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = Field(default="gpt-4.1-mini")
 
     DATA_DIR: str = Field(default="data")
-    REPORTS_DIR: str = Field(default="reports")
+    REPORTS_DIR: str = Field(default="data/reports")
+    RAW_DATA_DIR: str = Field(default="data/raw")
+    PROCESSED_DATA_DIR: str = Field(default="data/processed")
+    TRANSCRIPTS_DIR: str = Field(default="data/transcripts")
 
     CORS_ORIGINS: List[str] = Field(
         default=[
@@ -26,6 +31,35 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def derive_data_subdirectories(self) -> "Settings":
+        data_dir = str(self.DATA_DIR)
+        derived = {
+            "REPORTS_DIR": f"{data_dir}/reports",
+            "RAW_DATA_DIR": f"{data_dir}/raw",
+            "PROCESSED_DATA_DIR": f"{data_dir}/processed",
+            "TRANSCRIPTS_DIR": f"{data_dir}/transcripts",
+        }
+        for field_name, value in derived.items():
+            if field_name not in self.model_fields_set:
+                setattr(self, field_name, value)
+        return self
+
+    @property
+    def runtime_directories(self) -> tuple[str, ...]:
+        return (
+            self.REPORTS_DIR,
+            self.RAW_DATA_DIR,
+            self.PROCESSED_DATA_DIR,
+            self.TRANSCRIPTS_DIR,
+        )
+
+
+def bootstrap_data_directories(app_settings: Settings | None = None) -> None:
+    resolved_settings = app_settings or get_settings()
+    for directory in resolved_settings.runtime_directories:
+        Path(directory).mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache

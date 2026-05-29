@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from src.adapters.storage import load_json
-from src.app.core.config import settings
+from src.app.core.config import get_settings
 
 
 FINAL_REPORT_FILENAME = "final_report.json"
@@ -43,7 +43,7 @@ class ReportRecord:
 
 class ReportStore:
     def __init__(self, base_dir: str | Path | None = None) -> None:
-        self.base_dir = Path(base_dir or settings.REPORTS_DIR)
+        self.base_dir = Path(base_dir or get_settings().REPORTS_DIR)
 
     def list_reports(self) -> list[ReportRecord]:
         if not self.base_dir.exists():

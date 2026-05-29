@@ -49,4 +49,8 @@ Thumbs.db
 
 .codex
 runs/
-data/
+data/reports/*
+data/raw/*
+data/processed/*
+data/transcripts/*
+!data/**/.gitkeep
