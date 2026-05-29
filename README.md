@@ -16,7 +16,7 @@ AI-powered Fantasy Premier League workflow that converts expert YouTube videos i
 - 📺 Auto-fetch recent FPL YouTube videos from configured expert channels
 - 🧠 Run LLM-based transcript analysis into typed, structured outputs
 - 📊 Detect consensus, disagreement, captaincy, transfers, and team-reveal patterns
-- 📝 Generate markdown and JSON gameweek reports under `runs/`
+- 📝 Generate markdown and JSON gameweek reports under `data/reports/`
 - 📈 Explore results in a Streamlit dashboard and launch runs from the UI
 - 🐳 Run locally with `uv` or in Docker
 
@@ -58,13 +58,13 @@ Run expert analysis agents
     ↓
 Aggregate consensus + disagreements
     ↓
-Persist artifacts under runs/
+Persist artifacts under data/reports/
     ↓
 Review in Streamlit dashboard
 ```
 
 ## Outputs
-Each run produces reviewable artifacts under `runs/<gameweek-or-run-name>/`.
+Each run produces reviewable artifacts under `data/reports/<gameweek-or-run-name>/`.
 
 Core outputs:
 - `discovered_videos.json`: normalized metadata for candidate videos discovered from expert channels
@@ -76,6 +76,15 @@ Core outputs:
 - `manifest.json`: run metadata, counts, duplicate handling, and failures
 
 This makes the project useful both as an automation tool and as an inspectable data pipeline.
+
+## Runtime Data
+Mutable and generated files live under `data/`:
+- `data/reports/`: generated run reports and review artifacts
+- `data/raw/`: raw imported datasets before processing
+- `data/processed/`: cleaned or transformed datasets
+- `data/transcripts/`: cached transcripts and pipeline transcript logs
+
+These directories are created automatically when the API starts. Their generated contents are ignored by Git, while `.gitkeep` placeholders preserve the folder structure.
 
 ## Quick Start
 ```bash
@@ -132,13 +141,13 @@ make lint
 Source of truth command:
 
 ```bash
-uv run python -m app.main --gameweek 32 --output-dir runs/gw32-example --per-expert-limit 2 --no-synthesis
+uv run python -m app.main --gameweek 32 --output-dir data/reports/gw32-example --per-expert-limit 2 --no-synthesis
 ```
 
 Equivalent Make target:
 
 ```bash
-make run-cli GAMEWEEK=32 OUTPUT_DIR=runs/gw32-example
+make run-cli GAMEWEEK=32 OUTPUT_DIR=data/reports/gw32-example
 ```
 
 Useful overrides:
@@ -170,8 +179,8 @@ make run-ui
 To load a specific run folder or artifact:
 
 ```bash
-uv run streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501 -- --input runs/gw32
-make run-ui INPUT=runs/gw32
+uv run streamlit run app/ui/streamlit_app.py --server.address 0.0.0.0 --server.port 8501 -- --input data/reports/gw32
+make run-ui INPUT=data/reports/gw32
 ```
 
 The UI can also launch a fresh pipeline run from the sidebar and reload the resulting report into the same session.
@@ -205,16 +214,15 @@ make docker-run
 Then open `http://localhost:8501`.
 
 Notes:
-- `docker-compose.yml` is included because it makes local UI startup, `.env` loading, and persistent `runs/` and `data/` directories much easier for contributors.
-- The container mounts `./runs` and `./data` into `/app/runs` and `/app/data`, so generated artifacts stay on your host machine.
+- `docker-compose.yml` is included because it makes local UI startup, `.env` loading, and a persistent `data/` directory much easier for contributors.
+- The container mounts `./data` into `/app/data`, so generated artifacts stay on your host machine.
 - If you prefer plain Docker for the CLI, you can override the container command:
 
 ```bash
 docker run --rm -it --env-file .env \
-  -v "$(pwd)/runs:/app/runs" \
   -v "$(pwd)/data:/app/data" \
   fpl-agent:latest \
-  uv run python -m app.main --gameweek 32 --output-dir runs/gw32-docker --per-expert-limit 2 --no-synthesis
+  uv run python -m app.main --gameweek 32 --output-dir data/reports/gw32-docker --per-expert-limit 2 --no-synthesis
 ```
 
 Stop the Compose service with:
@@ -225,9 +233,9 @@ make docker-down
 
 ## Weekly Workflow
 1. Update `.env` if provider credentials or proxy settings changed.
-2. Run the weekly pipeline with `make run-cli GAMEWEEK=<n> OUTPUT_DIR=runs/gw<n>`.
-3. Review `runs/gw<n>/report.md` and the corresponding JSON artifacts.
-4. Open the dashboard with `make run-ui INPUT=runs/gw<n>` for visual review.
+2. Run the weekly pipeline with `make run-cli GAMEWEEK=<n> OUTPUT_DIR=data/reports/gw<n>`.
+3. Review `data/reports/gw<n>/report.md` and the corresponding JSON artifacts.
+4. Open the dashboard with `make run-ui INPUT=data/reports/gw<n>` for visual review.
 5. Re-run with different filters if you want to limit experts or compare outputs.
 
 ## Troubleshooting

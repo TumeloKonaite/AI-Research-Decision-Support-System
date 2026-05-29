@@ -85,6 +85,24 @@ def save_text(path: str | Path, text: str) -> None:
     output_path.write_text(text if text.endswith("\n") else f"{text}\n", encoding="utf-8")
 
 
+def save_raw_data(filename: str | Path, data: Any) -> Path:
+    output_path = Path(get_settings().RAW_DATA_DIR) / filename
+    save_json(output_path, data)
+    return output_path
+
+
+def save_processed_data(filename: str | Path, data: Any) -> Path:
+    output_path = Path(get_settings().PROCESSED_DATA_DIR) / filename
+    save_json(output_path, data)
+    return output_path
+
+
+def save_transcript_payload(filename: str | Path, payload: dict) -> Path:
+    output_path = Path(get_settings().TRANSCRIPTS_DIR) / filename
+    save_transcript(str(output_path), payload)
+    return output_path
+
+
 def load_json(path: str | Path) -> dict | list:
     with Path(path).open("r", encoding="utf-8") as handle:
         return json.load(handle)

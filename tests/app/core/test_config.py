@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.app.core.config import Settings, get_settings
+from src.app.core.config import Settings, bootstrap_data_directories, get_settings
 
 
 def test_settings_loads_values_from_env_file(tmp_path) -> None:
@@ -25,8 +25,31 @@ def test_settings_loads_values_from_env_file(tmp_path) -> None:
     assert settings.OPENAI_MODEL == "test-model"
     assert settings.DATA_DIR == "custom-data"
     assert settings.REPORTS_DIR == "custom-reports"
+    assert settings.RAW_DATA_DIR == "custom-data/raw"
+    assert settings.PROCESSED_DATA_DIR == "custom-data/processed"
+    assert settings.TRANSCRIPTS_DIR == "custom-data/transcripts"
     assert settings.CORS_ORIGINS == ["http://localhost:5173"]
     assert settings.ENVIRONMENT == "test"
+
+
+def test_data_subdirectories_derive_from_data_dir(tmp_path) -> None:
+    settings = Settings(DATA_DIR=str(tmp_path / "runtime"), _env_file=None)
+
+    assert settings.REPORTS_DIR == str(tmp_path / "runtime" / "reports")
+    assert settings.RAW_DATA_DIR == str(tmp_path / "runtime" / "raw")
+    assert settings.PROCESSED_DATA_DIR == str(tmp_path / "runtime" / "processed")
+    assert settings.TRANSCRIPTS_DIR == str(tmp_path / "runtime" / "transcripts")
+
+
+def test_bootstrap_data_directories_creates_runtime_directories(tmp_path) -> None:
+    settings = Settings(DATA_DIR=str(tmp_path / "runtime"), _env_file=None)
+
+    bootstrap_data_directories(settings)
+
+    assert (tmp_path / "runtime" / "reports").is_dir()
+    assert (tmp_path / "runtime" / "raw").is_dir()
+    assert (tmp_path / "runtime" / "processed").is_dir()
+    assert (tmp_path / "runtime" / "transcripts").is_dir()
 
 
 def test_get_settings_returns_cached_instance(monkeypatch) -> None:

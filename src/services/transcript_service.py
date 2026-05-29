@@ -10,12 +10,9 @@ from src.adapters.transcript_api import (
     WebshareProxySettings,
     fetch_transcript,
 )
-from src.app.core.config import settings
+from src.app.core.config import get_settings
 from src.utils.retry import RetryConfig, RetryError, retry_call
 from src.utils.text_cleaning import clean_transcript
-
-DEFAULT_TRANSCRIPT_CACHE_DIR = Path(settings.DATA_DIR) / "transcripts"
-
 
 def _build_transcript_cache_path(video_id: str, cache_dir: str | Path) -> Path:
     return Path(cache_dir) / f"{video_id}.json"
@@ -49,9 +46,10 @@ def get_clean_transcript(
     video_id: str,
     *,
     proxy_settings: WebshareProxySettings | None = None,
-    cache_dir: str | Path = DEFAULT_TRANSCRIPT_CACHE_DIR,
+    cache_dir: str | Path | None = None,
 ) -> dict:
-    cached_payload = _load_cached_transcript(video_id, cache_dir)
+    resolved_cache_dir = cache_dir or get_settings().TRANSCRIPTS_DIR
+    cached_payload = _load_cached_transcript(video_id, resolved_cache_dir)
     if cached_payload is not None:
         return cached_payload
 
@@ -86,7 +84,7 @@ def get_clean_transcript(
         "transcript": cleaned,
         "status": "available",
     }
-    _save_cached_transcript(video_id, payload, cache_dir)
+    _save_cached_transcript(video_id, payload, resolved_cache_dir)
     return payload
 
 

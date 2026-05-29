@@ -8,7 +8,6 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./runs:/app/runs
       - ./data:/app/data
     command:
       [
