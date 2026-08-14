@@ -1,171 +1,265 @@
-# FPL Technocrat
+# kasifpl
 
-FPL Technocrat turns expert YouTube videos into structured Fantasy Premier
-League recommendations served by FastAPI and a Next.js dashboard.
+[![Backend CI/CD](https://github.com/TumeloKonaite/FPL_Scout/actions/workflows/backend-ci-cd.yml/badge.svg)](https://github.com/TumeloKonaite/FPL_Scout/actions/workflows/backend-ci-cd.yml)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Next.js 15](https://img.shields.io/badge/Next.js-15-000000?logo=next.js&logoColor=white)](frontend/package.json)
+[![MIT License](https://img.shields.io/badge/License-MIT-2ea44f.svg)](LICENSE)
 
-## Storage architecture
+kasifpl turns Fantasy Premier League expert analysis into structured,
+gameweek-specific recommendations. The pipeline selects timely expert videos,
+collects and validates their evidence, extracts individual recommendations,
+builds a consensus report, and publishes that report through a FastAPI API and
+a Next.js web application.
 
-PostgreSQL is the backend's only durable store:
+The public experience provides:
 
-- local development uses the PostgreSQL service in `docker-compose.yml`;
-- deployed API and worker containers use Supabase PostgreSQL;
-- transcripts and revisions, pipeline runs, completed report snapshots, all
-  structured artifacts, manifests, and rendered Markdown are database rows.
+- a weekly briefing with key decisions, risks, and news to monitor;
+- a suggested starting XI and bench when the report has a valid squad;
+- prioritised transfer recommendations;
+- captaincy recommendations and comparisons;
+- expert consensus, team reveals, agreements, and disagreements;
+- a historical archive of published season/gameweek reports; and
+- protected administration for starting pipelines, generating reports, and
+  monitoring run status.
 
-The API and worker do not recover state from JSON, Markdown, SQLite, local
-directories, process memory, or Modal Volumes. A container can be replaced at
-any point without losing durable state. Completed reports are immutable
-point-in-time snapshots. Superseded snapshots retain their lineage for
-administrative audit, while public queries only resolve eligible `completed`
-rows scoped by both season and gameweek.
+![kasifpl Suggested Team page showing the gameweek squad and its consensus provenance](docs/assets/kasifpl-suggested-team.png)
 
-Pipeline exclusivity is enforced by a PostgreSQL partial unique index, so
-multiple API instances cannot accept overlapping queued/running jobs. A report
-is published and its pipeline run is marked completed in one transaction.
+## Architecture
 
-## Quick start
+- **Backend:** FastAPI on Python 3.12+, with the analysis and report pipeline
+  dispatched to a background worker in production.
+- **Frontend:** Next.js 15 and React 19. Browser requests use the same-origin
+  Next.js `/backend/*` proxy to reach FastAPI.
+- **Durable storage:** PostgreSQL is authoritative for transcripts, revisions,
+  pipeline runs, report artifacts, rendered Markdown, publication state, and
+  completed report snapshots.
+- **Caching:** Redis is optional, never authoritative, and is not required or
+  configured by the current checkout. The application works directly with
+  PostgreSQL and uses only small process-local caches where implemented.
+- **Production:** Vercel hosts the Next.js frontend, Modal runs the replaceable
+  FastAPI and pipeline-worker containers, and Supabase provides PostgreSQL.
+
+Completed reports are immutable point-in-time snapshots. Public queries return
+only the published, completed snapshot for a season and gameweek. Publication,
+supersession, and pipeline completion are protected by PostgreSQL constraints
+and transactions. Neither local files nor Modal Volumes are a fallback or
+recovery source for application data.
+
+## Repository names
+
+**kasifpl** is the product and user-facing brand. Some internal identifiers
+remain from earlier versions and are kept for compatibility:
+
+| Identifier | Current use |
+| --- | --- |
+| `FPL_Scout` | Repository/directory name in some clones |
+| `fpl-agent` | Python project metadata and default Docker image name |
+| `fpl_scout` | Default local PostgreSQL database name |
+| `fpl-technocrat` | Legacy Modal application identifier |
+
+These names do not refer to separate products.
+
+## Prerequisites
+
+- Python 3.12 or newer;
+- [`uv`](https://docs.astral.sh/uv/) for locked Python environments and
+  commands;
+- Node.js with npm (Node.js 20 LTS or newer is recommended); and
+- Docker with the Compose v2 plugin for local PostgreSQL and container
+  workflows.
+
+## Local setup
+
+Run the following from the repository root after a fresh clone:
 
 ```bash
 cp .env.example .env
 make install
+make install-frontend
 docker compose up -d postgres
 uv run alembic upgrade head
-make test
+```
+
+The checked-in development URLs connect both the application and Alembic to
+the local PostgreSQL container at
+`postgresql+psycopg://postgres:postgres@localhost:5432/fpl_scout`.
+
+Start the backend in one terminal:
+
+```bash
 make run-api
 ```
 
-Start the frontend separately:
+Start the frontend in another:
 
 ```bash
-make install-frontend
 make run-frontend
 ```
 
-The defaults connect to `postgresql+psycopg://postgres:postgres@localhost:5432/fpl_scout`.
-Both application and migration traffic use local PostgreSQL during development.
+Open:
+
+- kasifpl: <http://localhost:3000>
+- FastAPI interactive documentation: <http://localhost:8000/docs>
+- backend health check: <http://localhost:8000/health>
+
+The frontend proxy targets `http://127.0.0.1:8000` by default, so no frontend
+environment file is needed for this local layout. See
+[the frontend README](frontend/README.md) when the frontend must target a
+different backend.
+
+To stop the local services, stop both development processes and run:
+
+```bash
+make docker-down
+```
+
+### Containerized backend alternative
+
+`make docker-run` builds the backend image, starts PostgreSQL, applies Alembic
+migrations, and starts FastAPI. A backend container must use the Compose service
+hostname rather than `localhost`:
+
+```bash
+DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/fpl_scout \
+DIRECT_DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/fpl_scout \
+make docker-run
+```
+
+Start the frontend separately with `make run-frontend`.
 
 ## Configuration
 
-The important backend variables are:
+`.env.example` is the source of truth for backend configuration. Copy it to
+`.env`, keep real credentials out of Git, and change only the settings needed
+for the workflow being run.
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Application traffic; use local PostgreSQL locally and Supabase's transaction pooler in production |
-| `DIRECT_DATABASE_URL` | Alembic traffic; use a direct or session-pooler PostgreSQL URL |
-| `DATABASE_POOL_MODE` | Set to `transaction` for Supabase transaction pooling |
-| `OPENAI_API_KEY` | Expert analysis and synthesis |
-| `ADMIN_API_TOKEN` | Protects admin APIs |
-| `TRANSCRIPT_FAILURE_RETRY_HOURS` | Retry interval for unavailable transcripts |
+| `OPENAI_API_KEY` | Required for expert-analysis and synthesis pipeline runs |
+| `OPENAI_BASE_URL`, `OPENAI_MODEL` | Optional OpenAI-compatible endpoint and model selection |
+| `DATABASE_URL` | PostgreSQL URL used by application traffic |
+| `DIRECT_DATABASE_URL` | PostgreSQL URL used by Alembic; in production this must be a direct or session-pooled connection, not the transaction pooler |
+| `DATABASE_POOL_MODE` | Connection mode: `auto`, `direct`, `session`, or `transaction` |
+| `DATABASE_POOL_SIZE`, `DATABASE_MAX_OVERFLOW` | SQLAlchemy pool bounds |
+| `DATABASE_POOL_TIMEOUT_SECONDS`, `DATABASE_POOL_RECYCLE_SECONDS`, `DATABASE_CONNECT_TIMEOUT_SECONDS` | Database timeout and connection-lifecycle settings |
+| `TRANSCRIPT_FAILURE_RETRY_HOURS` | Delay before retrying a failed transcript |
+| `VIDEO_SELECTION_WINDOW_DAYS_BEFORE`, `VIDEO_SELECTION_WINDOW_DAYS_AFTER` | Allowed publication window around the supplied gameweek deadline |
+| `CORS_ORIGINS` | JSON list of browser origins accepted by FastAPI |
+| `ENVIRONMENT` | Runtime environment; production mode enables stricter database validation |
+| `ADMIN_API_TOKEN` | Credential for `/admin` and `/api/admin/*` operations |
+| `PIPELINE_API_TOKEN` | Backwards-compatible admin-token fallback when `ADMIN_API_TOKEN` is empty |
+| `ENABLE_WEBSHARE_PROXY` | Enables the optional Webshare route for transcript requests |
+| `WEBSHARE_PROXY_USERNAME`, `WEBSHARE_PROXY_PASSWORD` | Webshare credentials when its proxy is enabled |
 
-Production configuration fails fast unless both database URLs are valid
-PostgreSQL URLs. The direct migration URL may not use the transaction pooler on
-port 6543. Database failures are surfaced; there is no file fallback.
+Keep database URLs and admin/provider credentials server-side. In particular,
+never expose them through a `NEXT_PUBLIC_*` variable. Administrators enter the
+admin token at `/admin/login`; Next.js stores it in an HttpOnly, same-site
+cookie and forwards it only to the protected backend API.
 
-## Running the pipeline
+## Commands
 
-The admin API starts a durable background run:
+The commands below map directly to the current `Makefile`, `pyproject.toml`,
+and `frontend/package.json` scripts.
 
-```text
-POST /api/admin/pipeline/run
-GET  /api/admin/runs/{run_id}
-```
+| Task | Command |
+| --- | --- |
+| Install backend and development dependencies | `make install` |
+| Install frontend dependencies | `make install-frontend` |
+| Apply database migrations | `uv run alembic upgrade head` |
+| Run backend tests | `make test` |
+| Lint backend Python | `make lint` |
+| Run frontend tests | `npm --prefix frontend run test` |
+| Lint frontend TypeScript/React | `npm --prefix frontend run lint` |
+| Build the production frontend | `npm --prefix frontend run build` |
+| Start the backend development server | `make run-api` |
+| Start the frontend development server | `make run-frontend` |
+| Build the backend Docker image | `make docker-build` |
+| Start the containerized backend and PostgreSQL | `make docker-run` |
 
-The CLI writes the same PostgreSQL report snapshot:
+PostgreSQL integration tests are enabled only when `TEST_DATABASE_URL` points
+to a dedicated database whose name ends in `_test`; without it, pytest skips
+those tests. The regular `make test` command still runs the rest of the backend
+suite.
 
-```bash
-uv run python -m src.app.cli.run_gameweek_report \
-  --season 2025-26 --gameweek 32 --per-expert-limit 2 --no-synthesis
-```
-
-An optional `--run-id` assigns a database identifier. It is not a path.
-Every automated pipeline run independently revalidates selected-source titles,
-descriptions, transcripts, URLs, publication dates, and deadline evidence
-immediately before persistence.
-
-## Historical report regeneration
-
-Apply migrations before using the regeneration command:
-
-```bash
-uv run alembic upgrade head
-```
-
-First produce a machine-readable contamination inventory. This reads completed
-reports and does not change report state:
-
-```bash
-uv run python -m src.app.cli.regenerate_historical_reports \
-  --season 2025-26 \
-  --from-gameweek 30 \
-  --to-gameweek 37 \
-  --deadlines-file data/gameweek_deadlines/2025-26.json \
-  --dry-run \
-  --output /tmp/fpl-gw30-gw37-inventory.json
-```
-
-After reviewing the inventory, run the same command without `--dry-run`:
+To run the weekly pipeline from the CLI, supply a season; the Make target
+defaults to gameweek 32, two videos per expert, and synthesis disabled:
 
 ```bash
-uv run python -m src.app.cli.regenerate_historical_reports \
-  --season 2025-26 \
-  --from-gameweek 30 \
-  --to-gameweek 37 \
-  --deadlines-file data/gameweek_deadlines/2025-26.json \
-  --output /tmp/fpl-gw30-gw37-regeneration.json
+make run-cli SEASON=2025-26 GAMEWEEK=32
 ```
 
-Gameweeks are processed sequentially. Each replacement remains `processing`
-until its source evidence passes the independent publication gate. Publishing
-the replacement, superseding every prior completed row for the same
-season/gameweek, recording lineage, and inserting the audit record happen in
-one PostgreSQL transaction. A failure leaves the previous canonical report
-unchanged and stops the batch by default.
+Set `SYNTHESIS=1` to enable synthesis. `RUN_ID`, `PER_EXPERT_LIMIT`,
+`EXPERT_NAME`, and `EXPERT_COUNT` are optional Make variables.
 
-The command is safe to rerun: a canonical replacement with the same deadline
-and current validation-rule version is skipped. Identical selected-video
-fingerprints across gameweeks fail closed. The emergency override requires
-both `--allow-identical-fingerprint` and a non-empty
-`--override-justification`; both are recorded in audit metadata.
+## Frontend routes
 
-The JSON summary includes previous-to-replacement run mappings, resolved
-canonical run IDs, deadlines, per-video validation evidence, duplicate
-fingerprints, and high-overlap warnings. The same audit metadata is durable in
-the `historical_regeneration_audits` table.
+The public pages are:
 
-Verify both the public route and its internally resolved canonical run ID:
+| Route | Purpose |
+| --- | --- |
+| `/` and `/dashboard` | Weekly or selected historical briefing |
+| `/suggested-team` | Suggested XI, bench, and player support |
+| `/transfers` | Transfer recommendations |
+| `/captaincy` | Captaincy comparison |
+| `/expert-consensus` | Expert reveals, agreements, and disagreements |
+| `/reports` | Historical report archive |
 
-```bash
-uv run python -m src.scripts.verify_historical_regeneration \
-  --season 2025-26 --from-gameweek 30 --to-gameweek 37
-```
+Recommendation pages support bookmarkable
+`?season=YYYY-YY&gameweek=N` selections. Administrative routes are:
 
-Public and admin report endpoints resolve entirely from PostgreSQL:
+| Route | Purpose |
+| --- | --- |
+| `/admin/login` | Administrator sign-in |
+| `/admin` | Protected pipeline execution and status dashboard |
 
+`/pipeline-runner` is a compatibility redirect to `/admin`. `/admin/session`
+and `/backend/[...path]` are Next.js route handlers for the admin session and
+backend proxy, not user-facing pages.
+
+## FastAPI routes
+
+Public application routes:
+
+- `GET /health`
 - `GET /api/recommendations/latest`
-- `GET /api/recommendations?season=2025-26&gameweek=32`
 - `GET /api/recommendations/gameweeks`
-- `GET /api/reports`
+- `GET /api/recommendations?season=YYYY-YY&gameweek=N`
+- `GET /api/gameweek/current`
+- `POST /chat`
+
+The API also exposes `GET /` for a basic service message, `GET /openapi.json`
+for its schema, and FastAPI's generated UIs at `GET /docs` and `GET /redoc`.
+
+Protected administrative routes require a bearer token accepted by
+`ADMIN_API_TOKEN` (or its compatibility fallback):
+
+- `POST /api/admin/pipeline/run`
+- `POST /api/admin/reports/generate`
+- `GET /api/admin/pipeline/status`
+- `GET /api/admin/runs/latest`
+- `GET /api/admin/runs/{run_id}`
+- `GET /api/admin/reports`
 - `GET /api/admin/reports/{run_id}`
 
-## Tests
+The following protected endpoints remain as compatibility aliases:
 
-```bash
-uv run pytest
-uv run ruff check .
-npm --prefix frontend run test
-```
+- `POST /api/pipeline-runs`
+- `GET /api/pipeline-runs/{run_id}`
+- `GET /api/reports`
+- `GET /api/reports/latest`
+- `GET /api/reports/{run_id}`
 
-Database integration tests require PostgreSQL. Unit tests may inject repository
-mocks, but application code has no SQLite or filesystem store.
+New frontend work should use `/api/admin/*` and the public recommendation
+endpoints above.
 
-## Docker and deployment
+## Deployment and operations
 
-`docker compose up --build api` starts PostgreSQL, applies Alembic migrations,
-and runs the API. Only PostgreSQL's named data volume is persistent; the API
-container has no host data bind mount.
+Production uses Supabase's transaction pooler for `DATABASE_URL` and a direct
+or session-pooled URL for `DIRECT_DATABASE_URL`. Modal deploys the API and
+worker without a persistent Volume; Vercel deploys the frontend and points its
+server-side proxy at the Modal API.
 
-Production uses Supabase's pooled URL for `DATABASE_URL` and its direct or
-session URL for `DIRECT_DATABASE_URL`:
+Run the production schema gate before deploying backend code:
 
 ```bash
 make modal-migrate
@@ -173,44 +267,15 @@ make modal-verify
 make modal-deploy
 ```
 
-Modal deploys replaceable API and worker containers without a Modal Volume.
-See [docs/modal-deployment.md](docs/modal-deployment.md) for migration,
-verification, backup, and recovery procedures.
+Operational details live in dedicated documentation:
 
-## Legacy cutover
+- [Modal deployment, schema verification, legacy cutover, and recovery](docs/modal-deployment.md)
+- [Completed-report publication semantics](docs/report-publication.md)
+- [Consensus XI deployment and historical regeneration](docs/consensus-xi-regeneration.md)
+- [Completed-report lookup-index validation](docs/completed-report-public-index-validation.md)
 
-Before deleting the old Modal Volume, take a recovery copy and run the
-idempotent importer from a controlled environment:
-
-```bash
-uv run python -m scripts.migrate_legacy_storage \
-  --reports-dir /recovery/reports \
-  --runs-dir /recovery/runs \
-  --dry-run
-
-uv run python -m scripts.migrate_legacy_storage \
-  --reports-dir /recovery/reports \
-  --runs-dir /recovery/runs
-```
-
-The summary includes imported/skipped counts, malformed records, database
-counts, and every completed report identity. Existing run IDs are skipped, so
-the command is safe to repeat. Malformed or identity-conflicting reports are
-reported and left only in the recovery backup; they are never published.
-
-Keep the backup and importer for the agreed retention window. After API reads,
-counts, and identities have been verified and the window closes, delete the old
-Volume and remove the importer in a follow-up change.
-
-## Recovery
-
-Recover PostgreSQL using Supabase backups/PITR in production or the local
-PostgreSQL volume backup in development. After a restore:
-
-```bash
-uv run alembic current
-uv run python -m src.scripts.verify_database
-```
-
-Then verify representative report IDs through the existing API. Local
-application files are not a recovery source.
+Historical regeneration and legacy storage import are controlled, auditable
+operations. Use the dry-run and verification procedures in those documents
+rather than treating generated files as durable state. Recovery is performed
+from PostgreSQL backups/PITR, followed by migration and database verification;
+container files and retired Modal Volumes are not recovery sources.
