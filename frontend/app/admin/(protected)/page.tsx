@@ -2,10 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { PageShell } from "@/components/PageShell";
-import { ErrorState, LoadingState } from "@/components/ReportViewer";
 import { getErrorMessage } from "@/components/apiError";
 import { buildAdminPipelineInput, seasonValidationError } from "@/lib/admin/season";
-import { generateReport, getPipelineStatus, pollPipelineRun, runPipeline } from "@/src/lib/api";
+import { getPipelineStatus, pollPipelineRun, runPipeline } from "@/src/lib/api";
 import type { PipelineRun } from "@/src/types/report";
 
 function formatDate(value?: string) {
@@ -47,11 +46,9 @@ export default function AdminDashboardPage() {
 
     setError(null);
     setIsRunning(true);
-    const submitter = (event.nativeEvent as SubmitEvent).submitter;
-    const action = submitter instanceof HTMLButtonElement ? submitter.value : "pipeline";
     const input = buildAdminPipelineInput(season, gameweek, perExpertLimit);
     try {
-      const accepted = action === "report" ? await generateReport(input) : await runPipeline(input);
+      const accepted = await runPipeline(input);
       setRun(accepted);
       const completed = await pollPipelineRun(accepted, { onUpdate: setRun });
       setRun(completed);
@@ -65,7 +62,7 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <PageShell title="Administration" eyebrow="Pipeline operations" description="Run analysis, generate reports, and inspect internal execution status.">
+    <PageShell title="Administration" eyebrow="Pipeline operations" description="Run the report pipeline and inspect internal execution status.">
       <section className="runner-layout" aria-label="Administrator pipeline controls">
         <form className="form-panel" onSubmit={handleSubmit}>
           <h2>Manual execution</h2>
@@ -94,15 +91,14 @@ export default function AdminDashboardPage() {
           </label>
           <label><span>Gameweek</span><input min="1" max="38" onChange={(event) => setGameweek(event.target.value)} required type="number" value={gameweek} /></label>
           <label><span>Videos per expert</span><input min="1" onChange={(event) => setPerExpertLimit(event.target.value)} required type="number" value={perExpertLimit} /></label>
-          <button className="primary-button" disabled={isRunning} name="action" type="submit" value="pipeline">{isRunning ? "Execution in progress..." : "Run pipeline"}</button>
-          <button className="primary-button" disabled={isRunning} name="action" type="submit" value="report">Generate report</button>
+          <button className="primary-button" disabled={isRunning} type="submit">{isRunning ? "Execution in progress..." : "Run pipeline"}</button>
           <button disabled={isRunning} onClick={refresh} type="button">Refresh status</button>
         </form>
 
         <div className="result-panel">
           <h2>Latest run status</h2>
-          {isRunning ? <LoadingState label={`Pipeline is ${run?.status ?? "queued"}${run?.current_stage ? ` — ${run.current_stage}` : ""}.`} /> : null}
-          {error ? <ErrorState label={error} /> : null}
+          {isRunning ? <div aria-live="polite" className="state-panel loading-state">Pipeline is {run?.status ?? "queued"}{run?.current_stage ? ` — ${run.current_stage}` : ""}.</div> : null}
+          {error ? <div className="state-panel error-state" role="alert">{error}</div> : null}
           {!run ? <p className="empty-copy">No pipeline runs have been recorded.</p> : (
             <dl className="detail-grid">
               <div><dt>Run ID</dt><dd>{run.run_id}</dd></div>

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from src.app.api.routes.reports import _report_response, _summary_response
 from src.app.api.schemas.pipeline_runs import (
     PipelineRunRequest,
     PipelineRunResponse,
@@ -15,6 +17,7 @@ from src.app.domain.pipeline.service import create_pipeline_run, get_pipeline_st
 from src.app.domain.reports.service import (
     EmptyReportDirectoryError,
     InvalidReportFileError,
+    ReportBundle,
     ReportDirectoryNotFoundError,
     ReportNotFoundError,
     ReportService,
@@ -31,7 +34,20 @@ router = APIRouter(
 )
 
 
-def _start(request: PipelineRunRequest, response: Response) -> PipelineRunResponse:
+@router.post(
+    "/pipeline/run",
+    response_model=PipelineRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start the report pipeline",
+    description=(
+        "Queues the complete analysis and report-generation pipeline and returns "
+        "the durable run record."
+    ),
+)
+def start_pipeline(
+    request: PipelineRunRequest,
+    response: Response,
+) -> PipelineRunResponse:
     try:
         result = create_pipeline_run(input_data=request.input_data)
     except ValueError as exc:
@@ -44,17 +60,12 @@ def _start(request: PipelineRunRequest, response: Response) -> PipelineRunRespon
     return PipelineRunResponse.model_validate(result)
 
 
-@router.post("/pipeline/run", response_model=PipelineRunResponse, status_code=status.HTTP_202_ACCEPTED)
-def start_pipeline(request: PipelineRunRequest, response: Response) -> PipelineRunResponse:
-    return _start(request, response)
-
-
-@router.post("/reports/generate", response_model=PipelineRunResponse, status_code=status.HTTP_202_ACCEPTED)
-def generate_report(request: PipelineRunRequest, response: Response) -> PipelineRunResponse:
-    return _start(request, response)
-
-
-@router.get("/pipeline/status", response_model=PipelineStatusResponse)
+@router.get(
+    "/pipeline/status",
+    response_model=PipelineStatusResponse,
+    summary="Get pipeline status",
+    description="Returns the latest durable run, or an idle status when none exists.",
+)
 def pipeline_status() -> PipelineStatusResponse:
     latest = PipelineRunRepository().get_latest()
     if latest is None:
@@ -63,15 +74,12 @@ def pipeline_status() -> PipelineStatusResponse:
     return PipelineStatusResponse(status=run.status, latest_run=run)
 
 
-@router.get("/runs/latest", response_model=PipelineRunResponse)
-def latest_run() -> PipelineRunResponse:
-    latest = PipelineRunRepository().get_latest()
-    if latest is None:
-        raise HTTPException(status_code=404, detail="No pipeline runs found")
-    return PipelineRunResponse.model_validate(latest)
-
-
-@router.get("/runs/{run_id}", response_model=PipelineRunResponse)
+@router.get(
+    "/runs/{run_id}",
+    response_model=PipelineRunResponse,
+    summary="Get a pipeline run",
+    description="Returns one durable pipeline run by its identifier.",
+)
 def pipeline_run(run_id: str) -> PipelineRunResponse:
     result = get_pipeline_status(run_id)
     if result is None:
@@ -79,7 +87,12 @@ def pipeline_run(run_id: str) -> PipelineRunResponse:
     return PipelineRunResponse.model_validate(result)
 
 
-@router.get("/reports", response_model=list[ReportSummary])
+@router.get(
+    "/reports",
+    response_model=list[ReportSummary],
+    summary="List internal reports",
+    description="Lists completed report records, including internal run identifiers.",
+)
 def reports(service: ReportService = Depends(get_report_service)) -> list[ReportSummary]:
     try:
         return [_summary_response(report) for report in service.list_reports()]
@@ -89,7 +102,12 @@ def reports(service: ReportService = Depends(get_report_service)) -> list[Report
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.get("/reports/{run_id}", response_model=ReportResponse)
+@router.get(
+    "/reports/{run_id}",
+    response_model=ReportResponse,
+    summary="Get an internal report",
+    description="Returns one completed report by its internal pipeline run identifier.",
+)
 def report(run_id: str, service: ReportService = Depends(get_report_service)) -> ReportResponse:
     try:
         return _report_response(service.get_report(run_id))
@@ -99,3 +117,25 @@ def report(run_id: str, service: ReportService = Depends(get_report_service)) ->
         raise HTTPException(status_code=404, detail="No reports found") from exc
     except InvalidReportFileError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _summary_response(report: Any) -> ReportSummary:
+    created_at = None
+    updated_at = getattr(report, "updated_at", None)
+    if updated_at is not None:
+        created_at = datetime.fromtimestamp(updated_at, tz=UTC).isoformat()
+
+    return ReportSummary(
+        run_id=report.run_id,
+        season=getattr(report, "season", None),
+        gameweek=getattr(report, "gameweek", None),
+        created_at=created_at,
+        title=getattr(report, "title", None),
+    )
+
+
+def _report_response(report: ReportBundle) -> ReportResponse:
+    return ReportResponse(
+        run_id=report.run_id,
+        report=report.final_report.model_dump(),
+    )

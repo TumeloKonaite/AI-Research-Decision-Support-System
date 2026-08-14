@@ -1,4 +1,4 @@
-import type { AdminReportResponse, AvailableGameweeksResponse, CurrentGameweekResponse, FullReportResponse, PipelineRun, PipelineStatus, ReportSummary } from "../types/report";
+import type { AvailableGameweeksResponse, CurrentGameweekResponse, FullReportResponse, PipelineRun, PipelineStatus } from "../types/report";
 import type { AdminPipelineInput } from "../../lib/admin/season";
 
 const DEFAULT_API_BASE_URL = "/backend";
@@ -84,14 +84,6 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   return responseBody as T;
 }
 
-export function getReports(): Promise<ReportSummary[]> {
-  return apiRequest<ReportSummary[]>("/api/admin/reports");
-}
-
-export function getLatestReport(): Promise<FullReportResponse> {
-  return apiRequest<FullReportResponse>("/api/recommendations/latest");
-}
-
 export function getAvailableGameweeks(): Promise<AvailableGameweeksResponse> {
   return apiRequest<AvailableGameweeksResponse>("/api/recommendations/gameweeks");
 }
@@ -106,19 +98,8 @@ export function getCurrentGameweek(): Promise<CurrentGameweekResponse> {
   return apiRequest<CurrentGameweekResponse>("/api/gameweek/current");
 }
 
-export function getReport(runId: string): Promise<AdminReportResponse> {
-  return apiRequest<AdminReportResponse>(`/api/admin/reports/${encodeURIComponent(runId)}`);
-}
-
 export function runPipeline(inputData: AdminPipelineInput): Promise<PipelineRun> {
   return apiRequest<PipelineRun>("/api/admin/pipeline/run", {
-    body: { input_data: inputData },
-    method: "POST"
-  });
-}
-
-export function generateReport(inputData: AdminPipelineInput): Promise<PipelineRun> {
-  return apiRequest<PipelineRun>("/api/admin/reports/generate", {
     body: { input_data: inputData },
     method: "POST"
   });
@@ -176,14 +157,10 @@ export const api = {
     apiRequest<T>(path, { ...options, method: "GET" }),
   post: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
     apiRequest<T>(path, { ...options, body, method: "POST" }),
-  getReports,
-  getLatestReport,
   getAvailableGameweeks,
   getSelectedReport,
   getCurrentGameweek,
-  getReport,
   runPipeline,
-  generateReport,
   getPipelineRun,
   getPipelineStatus,
   pollPipelineRun,

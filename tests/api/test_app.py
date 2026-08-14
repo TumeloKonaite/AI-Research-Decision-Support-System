@@ -33,10 +33,25 @@ def test_health_endpoint(monkeypatch) -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_chat_endpoint() -> None:
-    client = TestClient(app)
+def test_openapi_documents_the_canonical_route_surface() -> None:
+    schema = create_app().openapi()
 
-    response = client.post("/chat", json={"message": "hello", "session_id": "session-1"})
+    assert set(schema["paths"]) == {
+        "/",
+        "/health",
+        "/api/recommendations/latest",
+        "/api/recommendations/gameweeks",
+        "/api/recommendations",
+        "/api/gameweek/current",
+        "/api/admin/pipeline/run",
+        "/api/admin/pipeline/status",
+        "/api/admin/runs/{run_id}",
+        "/api/admin/reports",
+        "/api/admin/reports/{run_id}",
+    }
 
-    assert response.status_code == 200
-    assert response.json() == {"response": "hello", "session_id": "session-1"}
+    for path, operations in schema["paths"].items():
+        for operation in operations.values():
+            assert operation["description"]
+            if path.startswith("/api/admin/"):
+                assert operation["security"] == [{"HTTPBearer": []}]

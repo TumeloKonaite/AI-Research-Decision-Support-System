@@ -218,39 +218,38 @@ backend proxy, not user-facing pages.
 
 ## FastAPI routes
 
-Public application routes:
+Public application routes and their in-repository consumers:
 
-- `GET /health`
-- `GET /api/recommendations/latest`
-- `GET /api/recommendations/gameweeks`
-- `GET /api/recommendations?season=YYYY-YY&gameweek=N`
-- `GET /api/gameweek/current`
-- `POST /chat`
+| Route | Consumer |
+| --- | --- |
+| `GET /health` | Deployment readiness checks, Modal smoke test, and API tests |
+| `GET /api/recommendations/latest` | Public API clients and API tests |
+| `GET /api/recommendations/gameweeks` | Frontend report selector/archive and API tests |
+| `GET /api/recommendations?season=YYYY-YY&gameweek=N` | Frontend report pages, regeneration verification, and API tests |
+| `GET /api/gameweek/current` | Frontend report selection and API tests |
 
 The API also exposes `GET /` for a basic service message, `GET /openapi.json`
 for its schema, and FastAPI's generated UIs at `GET /docs` and `GET /redoc`.
 
 Protected administrative routes require a bearer token accepted by
-`ADMIN_API_TOKEN` (or its compatibility fallback):
+`ADMIN_API_TOKEN` (or its credential fallback):
 
-- `POST /api/admin/pipeline/run`
-- `POST /api/admin/reports/generate`
-- `GET /api/admin/pipeline/status`
-- `GET /api/admin/runs/latest`
-- `GET /api/admin/runs/{run_id}`
-- `GET /api/admin/reports`
-- `GET /api/admin/reports/{run_id}`
+| Route | Consumer |
+| --- | --- |
+| `POST /api/admin/pipeline/run` | Frontend admin dashboard, Modal smoke test, and API tests |
+| `GET /api/admin/pipeline/status` | Frontend admin session guard/dashboard and API tests |
+| `GET /api/admin/runs/{run_id}` | Frontend polling, Modal smoke test, and API tests |
+| `GET /api/admin/reports` | Administrative API clients and API tests |
+| `GET /api/admin/reports/{run_id}` | Deployment verification, administrative API clients, and API tests |
 
-The following protected endpoints remain as compatibility aliases:
+These are the canonical protected routes; the API does not register parallel
+compatibility aliases. The pipeline start performs the complete analysis and
+report-generation workflow. Public pages use only the recommendation endpoints
+above and never expose internal run identifiers.
 
-- `POST /api/pipeline-runs`
-- `GET /api/pipeline-runs/{run_id}`
-- `GET /api/reports`
-- `GET /api/reports/latest`
-- `GET /api/reports/{run_id}`
-
-New frontend work should use `/api/admin/*` and the public recommendation
-endpoints above.
+The Python CLI invokes application services directly; it does not consume the
+HTTP API. `GET /`, FastAPI's schema/UI routes, and the Next.js proxy/session
+handlers are infrastructure surfaces rather than report or pipeline operations.
 
 ## Deployment and operations
 

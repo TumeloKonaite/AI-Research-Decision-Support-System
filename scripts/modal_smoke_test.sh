@@ -12,8 +12,8 @@ trap 'rm -f "$response_file"' EXIT
 http_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
   --header "Authorization: Bearer ${PIPELINE_API_TOKEN}" \
   --header 'Content-Type: application/json' \
-  --data "{\"input_data\":{\"gameweek\":${GAMEWEEK:-1},\"per_expert_limit\":1,\"expert_count\":1}}" \
-  "${MODAL_API_URL%/}/api/pipeline-runs")"
+  --data "{\"input_data\":{\"season\":\"${SEASON:-2025-26}\",\"gameweek\":${GAMEWEEK:-1},\"per_expert_limit\":1,\"expert_count\":1}}" \
+  "${MODAL_API_URL%/}/api/admin/pipeline/run")"
 
 if [[ "$http_status" != "202" ]]; then
   printf 'Expected pipeline POST status 202, received %s\n' "$http_status" >&2
@@ -27,7 +27,8 @@ printf 'Accepted pipeline run: %s\n' "$run_id"
 deadline="$((SECONDS + ${SMOKE_TIMEOUT_SECONDS:-3600}))"
 while (( SECONDS < deadline )); do
   curl --fail --silent --show-error \
-    "${MODAL_API_URL%/}/api/pipeline-runs/${run_id}" >"$response_file"
+    --header "Authorization: Bearer ${PIPELINE_API_TOKEN}" \
+    "${MODAL_API_URL%/}/api/admin/runs/${run_id}" >"$response_file"
   run_status="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$response_file")"
   printf 'Pipeline status: %s\n' "$run_status"
   if [[ "$run_status" == "completed" ]]; then

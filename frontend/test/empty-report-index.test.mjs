@@ -31,8 +31,9 @@ test("public report pages render a clear zero-report state", () => {
   assert.match(source("components/kasifpl/components/ArchiveGrid.tsx"), /No archived reports available\./);
 });
 
-test("selectors remain disabled when the index has no seasons", () => {
-  const selector = source("components/report-selection/GameweekSelector.tsx");
-  assert.match(selector, /const disabled = isLoadingIndex \|\| !availableSeasons\.length/);
-  assert.match(selector, /isLoadingIndex \? "Loading…" : "Unavailable"/);
+test("the header omits the selector when no report can be selected", () => {
+  const header = source("components/Header.tsx");
+
+  assert.match(header, /isReportPage && selection \? \(/);
+  assert.match(header, /rightSlot=\{selector\}/);
 });

@@ -6,11 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from src.app.api.routes.chat import router as chat_router
 from src.app.api.routes.admin import router as admin_router
 from src.app.api.routes.health import router as health_router
-from src.app.api.routes.pipeline_runs import router as pipeline_runs_router
-from src.app.api.routes.reports import router as reports_router
 from src.app.api.routes.public import router as public_router
 from src.app.api.middleware.public_recommendations import (
     PublicRecommendationTimingMiddleware,
@@ -32,7 +29,30 @@ def load_runtime_environment() -> None:
 def create_app() -> FastAPI:
     load_runtime_environment()
     settings = get_app_settings()
-    app = FastAPI(title="FPL Technocrat API")
+    app = FastAPI(
+        title="FPL Technocrat API",
+        description=(
+            "Public Fantasy Premier League recommendations and authenticated "
+            "administrative pipeline operations."
+        ),
+        openapi_tags=[
+            {
+                "name": "Service",
+                "description": "Service identity and readiness endpoints.",
+            },
+            {
+                "name": "Public recommendations",
+                "description": "Read-only published recommendation snapshots.",
+            },
+            {
+                "name": "Admin",
+                "description": (
+                    "Protected report and pipeline operations. Every endpoint "
+                    "requires an administrator bearer token."
+                ),
+            },
+        ],
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
@@ -42,16 +62,18 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(PublicRecommendationTimingMiddleware)
 
-    @app.get("/")
+    @app.get(
+        "/",
+        tags=["Service"],
+        summary="Identify the API service",
+        description="Returns the stable service name for basic discovery.",
+    )
     async def root() -> dict[str, str]:
         return {"message": "FPL Technocrat API"}
 
     app.include_router(health_router)
     app.include_router(public_router)
     app.include_router(admin_router)
-    app.include_router(reports_router)
-    app.include_router(pipeline_runs_router)
-    app.include_router(chat_router)
     return app
 
 
