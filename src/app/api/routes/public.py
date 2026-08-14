@@ -68,7 +68,12 @@ def _report_payload(report: ReportBundle) -> dict[str, Any]:
     return report.final_report.model_dump()
 
 
-@router.get("/recommendations/latest", response_model=LatestRecommendationsResponse)
+@router.get(
+    "/recommendations/latest",
+    response_model=LatestRecommendationsResponse,
+    summary="Get the latest recommendations",
+    description="Returns the latest completed public recommendation snapshot.",
+)
 def get_latest_recommendations(
     service: ReportService = Depends(get_report_service),
     fpl: FplApiClient = Depends(get_current_gameweek_service),
@@ -91,7 +96,12 @@ def get_latest_recommendations(
     )
 
 
-@router.get("/recommendations/gameweeks", response_model=AvailableGameweeksResponse)
+@router.get(
+    "/recommendations/gameweeks",
+    response_model=AvailableGameweeksResponse,
+    summary="List published gameweeks",
+    description="Lists the season and gameweek snapshots available to public pages.",
+)
 def list_available_gameweeks(
     service: ReportService = Depends(get_report_service),
 ) -> AvailableGameweeksResponse:
@@ -117,7 +127,12 @@ def list_available_gameweeks(
     )
 
 
-@router.get("/recommendations", response_model=PublicRecommendationResponse)
+@router.get(
+    "/recommendations",
+    response_model=PublicRecommendationResponse,
+    summary="Get recommendations for a gameweek",
+    description="Returns one published snapshot selected by season and gameweek.",
+)
 def get_recommendations(
     season: SeasonQuery,
     gameweek: Annotated[int, Query(ge=1, le=38)],
@@ -171,7 +186,14 @@ def _not_found_response(season: str, gameweek: int) -> JSONResponse:
         return JSONResponse(status_code=404, content=content)
 
 
-@router.get("/gameweek/current", response_model=CurrentGameweekResponse)
+@router.get(
+    "/gameweek/current",
+    response_model=CurrentGameweekResponse,
+    summary="Get the current gameweek",
+    description=(
+        "Returns the upcoming gameweek and whether its recommendations are published."
+    ),
+)
 def get_current_gameweek(
     service: ReportService = Depends(get_report_service),
     fpl: FplApiClient = Depends(get_current_gameweek_service),

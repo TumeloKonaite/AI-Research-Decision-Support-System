@@ -48,7 +48,7 @@ test("valid season and gameweek values build one canonical admin input", () => {
   });
 });
 
-test("run pipeline and generate report requests both include season", async () => {
+test("run pipeline request uses the canonical admin route and includes season", async () => {
   const calls = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
@@ -62,30 +62,24 @@ test("run pipeline and generate report requests both include season", async () =
   const input = { season: "2025-26", gameweek: 35, per_expert_limit: 1 };
   try {
     await api.runPipeline(input);
-    await api.generateReport(input);
   } finally {
     globalThis.fetch = originalFetch;
   }
 
-  assert.deepEqual(calls.map(({ url }) => url), [
-    "/backend/api/admin/pipeline/run",
-    "/backend/api/admin/reports/generate"
-  ]);
+  assert.deepEqual(calls.map(({ url }) => url), ["/backend/api/admin/pipeline/run"]);
   for (const { options } of calls) {
     assert.equal(options.method, "POST");
     assert.deepEqual(JSON.parse(options.body), { input_data: input });
   }
 });
 
-test("invalid seasons return before either admin API action", () => {
+test("invalid seasons return before the admin API action", () => {
   const admin = source("app/admin/(protected)/page.tsx");
   const validation = admin.indexOf("const validationError = seasonValidationError(season)");
   const earlyReturn = admin.indexOf("if (validationError) return");
   const pipelineCall = admin.indexOf("await runPipeline(input)");
-  const reportCall = admin.indexOf("await generateReport(input)");
 
   assert.ok(validation >= 0);
   assert.ok(earlyReturn > validation);
   assert.ok(pipelineCall > earlyReturn);
-  assert.ok(reportCall > earlyReturn);
 });

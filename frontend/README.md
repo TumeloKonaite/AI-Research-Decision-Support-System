@@ -25,7 +25,7 @@ the detail table remains available for diagnosis and legacy reports remain suppo
 - Captaincy
 - Transfers
 - Expert Consensus
-- Admin (`/admin`): authenticated pipeline execution, report generation, and internal status
+- Admin (`/admin`): authenticated report-pipeline execution and internal status
 
 ## Setup
 
@@ -60,6 +60,11 @@ stored in an HttpOnly, same-site session cookie and forwarded only to `/api/admi
 
 Browser requests always use the same-origin `/backend/*` proxy; no backend URL or
 pipeline credential is included in the client bundle.
+
+Public pages call only `/api/recommendations`,
+`/api/recommendations/gameweeks`, and `/api/gameweek/current`. The protected
+admin UI calls only `/api/admin/pipeline/run`, `/api/admin/pipeline/status`, and
+`/api/admin/runs/{run_id}`. Parallel compatibility route families are not used.
 
 Start the FastAPI backend from the repository root:
 

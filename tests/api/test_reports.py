@@ -133,7 +133,7 @@ def test_list_reports_returns_200_and_a_list() -> None:
         StubReportService({"gw32": StubReportBundle("gw32", _final_report())})
     )
 
-    response = client.get("/api/reports")
+    response = client.get("/api/admin/reports")
 
     assert response.status_code == 200
     assert response.json() == [
@@ -147,12 +147,12 @@ def test_list_reports_returns_200_and_a_list() -> None:
     ]
 
 
-def test_latest_report_returns_200_when_report_exists() -> None:
+def test_admin_report_returns_200_when_report_exists() -> None:
     client = _client(
         StubReportService({"gw32": StubReportBundle("gw32", _final_report())})
     )
 
-    response = client.get("/api/reports/latest")
+    response = client.get("/api/admin/reports/gw32")
 
     assert response.status_code == 200
     assert response.json()["run_id"] == "gw32"
@@ -278,7 +278,7 @@ def test_latest_report_preserves_structured_suggested_team() -> None:
     )
     client = _client(StubReportService({"gw32": StubReportBundle("gw32", report)}))
 
-    payload = client.get("/api/reports/latest").json()["report"]["suggested_team"]
+    payload = client.get("/api/admin/reports/gw32").json()["report"]["suggested_team"]
 
     assert payload["formation"] == "3-4-3"
     assert len(payload["startingXi"]) == 11
@@ -331,13 +331,13 @@ def test_latest_report_preserves_structured_suggested_team() -> None:
     }
 
 
-def test_latest_report_returns_404_when_no_reports_exist() -> None:
+def test_admin_report_returns_404_when_no_reports_exist() -> None:
     client = _client(StubReportService())
 
-    response = client.get("/api/reports/latest")
+    response = client.get("/api/admin/reports/gw99")
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "No reports found"}
+    assert response.json() == {"detail": "Report not found: gw99"}
 
 
 def test_get_report_returns_200_for_existing_report() -> None:
@@ -345,7 +345,7 @@ def test_get_report_returns_200_for_existing_report() -> None:
         StubReportService({"gw32": StubReportBundle("gw32", _final_report())})
     )
 
-    response = client.get("/api/reports/gw32")
+    response = client.get("/api/admin/reports/gw32")
 
     assert response.status_code == 200
     assert response.json()["run_id"] == "gw32"
@@ -355,7 +355,7 @@ def test_get_report_returns_200_for_existing_report() -> None:
 def test_get_report_returns_404_for_missing_report() -> None:
     client = _client(StubReportService())
 
-    response = client.get("/api/reports/gw99")
+    response = client.get("/api/admin/reports/gw99")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Report not found: gw99"}

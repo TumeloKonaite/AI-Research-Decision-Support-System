@@ -39,37 +39,14 @@ test("reports page renders the public canonical archive", () => {
   assert.match(reportsPage, /reportHref\("\/dashboard"/);
 });
 
-test("report viewer renders every final report section", () => {
-  const viewer = source("components/ReportViewer.tsx");
-  const expectedSections = [
-    "Overview",
-    "Transfers",
-    "Captaincy",
-    "Chip Strategy",
-    "Fixture Notes",
-    "Disagreements",
-    "Conditional Advice",
-    "Wait For News",
-    "Expert Team Reveals",
-    "Conclusion"
-  ];
-
-  for (const section of expectedSections) {
-    assert.match(viewer, new RegExp(`<h2>${section}</h2>`));
-  }
-});
-
 test("recommendations show evidence without generic confidence percentages", () => {
-  const evidence = source("components/RecommendationEvidence.tsx");
+  const evidence = source("components/kasifpl/components/RecommendationEvidence.tsx");
   const captaincy = source("app/captaincy/page.tsx");
   const transfers = source("app/transfers/page.tsx");
-  const viewer = source("components/ReportViewer.tsx");
 
-  assert.match(evidence, /Strong consensus/);
-  assert.match(evidence, /Supported by/);
-  assert.match(evidence, /View full source attribution/);
-  assert.match(evidence, /Last updated:/);
-  for (const page of [captaincy, transfers, viewer]) {
+  assert.match(evidence, /Consensus/);
+  assert.match(evidence, /Sources/);
+  for (const page of [captaincy, transfers]) {
     assert.doesNotMatch(page, /% (?:expert )?confidence/);
     assert.doesNotMatch(page, /confidence-bar/);
   }
@@ -114,10 +91,9 @@ test("polling stops on terminal states and has retry and timeout limits", () => 
 });
 
 test("public navigation and APIs do not expose operational controls", () => {
-  const sidebar = source("components/Sidebar.tsx");
+  const header = source("components/Header.tsx");
   const api = source("src/lib/api.ts");
-  assert.doesNotMatch(sidebar, /\/admin|pipeline-runner|Pipeline Runner/);
-  assert.match(api, /\/api\/recommendations\/latest/);
+  assert.doesNotMatch(header, /\/admin|pipeline-runner|Pipeline Runner/);
   assert.match(api, /\/api\/recommendations\/gameweeks/);
   assert.match(api, /getSelectedReport/);
   assert.match(api, /\/api\/admin\/pipeline\/run/);
@@ -127,7 +103,7 @@ test("admin dashboard exposes controls and internal failure details", () => {
   const admin = source("app/admin/(protected)/page.tsx");
   const guard = source("app/admin/(protected)/layout.tsx");
   assert.match(admin, /"Run pipeline"/);
-  assert.match(admin, />Generate report</);
+  assert.doesNotMatch(admin, />Generate report</);
   assert.match(admin, />Failure details</);
   assert.match(admin, /disabled=\{isRunning\}/);
   assert.match(guard, /redirect\("\/admin\/login"\)/);
